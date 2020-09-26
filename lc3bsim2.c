@@ -3,10 +3,10 @@
     in this comment.
     REFER TO THE SUBMISSION INSTRUCTION FOR DETAILS
 
-    Name 1: Full name of the first partner 
-    Name 2: Full name of the second partner
-    UTEID 1: UT EID of the first partner
-    UTEID 2: UT EID of the second partner
+    Name 1: guy farmer 
+    Name 2: tom li
+    UTEID 1: gcf375
+    UTEID 2: hl26868
 */
 
 /***************************************************************/
@@ -34,7 +34,19 @@
 /***************************************************************/
 
 void process_instruction();
-
+void and(int currInstruction);
+void add();
+void br();
+void jmp();
+void jsrr();
+void ldb();
+void lea();
+void not();
+void shf();
+void stb();
+void stw();
+void trap();
+void jsrr();
 /***************************************************************/
 /* A couple of useful definitions.                             */
 /***************************************************************/
@@ -352,7 +364,7 @@ void initialize(char *program_filename, int num_prog_files) {
   for ( i = 0; i < num_prog_files; i++ ) {
     load_program(program_filename);
     while(*program_filename++ != '\0');
-  }
+ }
   CURRENT_LATCHES.Z = 1;  
   NEXT_LATCHES = CURRENT_LATCHES;
     
@@ -413,9 +425,62 @@ void process_instruction(){
    *  
    *    Process one instruction at a time  
    *       -Fetch one instruction
+   
    *       -Decode 
    *       -Execute
    *       -Update NEXT_LATCHES
-   */     
+   */   
+    System_Latches currentLatch = CURRENT_LATCHES;
 
+    // here is the fetch portion currInstruction is the current intruction  
+    int currInstLow = MEMORY[CURRENT_LATCHES.PC>>1][0]&0x00ff;
+    int currInstHigh = MEMORY[CURRENT_LATCHES.PC>>1][1]&0x00ff;
+    currInstHigh = currInstHigh << 8;
+    int currInstruction = currInstHigh | currInstLow;
+    NEXT_LATCHES.PC = CURRENT_LATCHES.PC+=1;
+    // fetch portion ended
+    // 	here is the decode portion
+    int opcode = currInstruction & 0xf000;
+    if(opcode == 0x5000) and(currInstruction);
+    if(opcode == 0x1000) add();
+    if(opcode == 0x0000) br();
+    if(opcode == 0xc000) jmp();
+    if(opcode == 0x4000) jsrr();
+    if(opcode == 0x2000) ldb();
+    if(opcode == 0xe000) lea();
+    if(opcode == 0x9000) not();
+    if(opcode == 0xd000) shf();
+    if(opcode == 0x3000) stb();
+    if(opcode == 0x7000) stw();
+    if(opcode == 0xf000) trap();
+    if(opcode == 0x4000) jsrr();
+    
+    
+ 	exit(1);
 }
+void and(int currInstruction){
+
+    //	if (bit[5] == 0)
+    //	DR = SR1 AND SR2;
+    //	else
+    //	DR = SR1 AND SEXT(imm5);
+    //	setcc();
+    int destReg;
+    int srcReg1;
+    int srcReg2;
+    if (!(currInstruction & 0x0020)){
+      
+    }
+}
+void add(){}
+void br(){}
+void jmp(){}
+void jsrr(){}
+void ldb(){}
+void lea(){}
+void not(){}
+void shf(){}
+void stb(){}
+void stw(){}
+void trap(){}
+void jsrr(){}
