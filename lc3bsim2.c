@@ -35,18 +35,22 @@
 
 void process_instruction();
 void and(int currInstruction);
-void add();
-void br();
-void jmp();
-void jsrr();
-void ldb();
-void lea();
-void not();
-void shf();
-void stb();
-void stw();
-void trap();
-void jsrr();
+void add(int currInstruction);
+void br(int currInstruction);
+void jmp(int currInstruction);
+void jsrr(int currInstruction);
+void ldb(int currInstruction);
+void ldw(int currInstruction);
+void lea(int currInstruction);
+void not(int currInstruction);
+void shf(int currInstruction);
+void stb(int currInstruction);
+void stw(int currInstruction);
+void trap(int currInstruction);
+void jsrr(int currInstruction);
+void sext(int *number, int bit);
+int isPositive(int num);
+int isNegative(int num);
 /***************************************************************/
 /* A couple of useful definitions.                             */
 /***************************************************************/
@@ -437,26 +441,24 @@ void process_instruction(){
     int currInstHigh = MEMORY[CURRENT_LATCHES.PC>>1][1]&0x00ff;
     currInstHigh = currInstHigh << 8;
     int currInstruction = currInstHigh | currInstLow;
-    NEXT_LATCHES.PC = CURRENT_LATCHES.PC+=1;
+    NEXT_LATCHES.PC = CURRENT_LATCHES.PC+=2;
+    NEXT_LATCHES.N = NEXT_LATCHES.P = NEXT_LATCHES.Z = 0;
     // fetch portion ended
     // 	here is the decode portion
     int opcode = currInstruction & 0xf000;
     if(opcode == 0x5000) and(currInstruction);
-    if(opcode == 0x1000) add();
-    if(opcode == 0x0000) br();
-    if(opcode == 0xc000) jmp();
-    if(opcode == 0x4000) jsrr();
-    if(opcode == 0x2000) ldb();
-    if(opcode == 0xe000) lea();
-    if(opcode == 0x9000) not();
-    if(opcode == 0xd000) shf();
-    if(opcode == 0x3000) stb();
-    if(opcode == 0x7000) stw();
-    if(opcode == 0xf000) trap();
-    if(opcode == 0x4000) jsrr();
-    
-    
- 	exit(1);
+    if(opcode == 0x1000) add(currInstruction);
+    if(opcode == 0x0000) br(currInstruction);
+    if(opcode == 0xc000) jmp(currInstruction);
+    if(opcode == 0x4000) jsrr(currInstruction);
+    if(opcode == 0x2000) ldb(currInstruction);
+    if(opcode == 0x6000) ldw(currInstruction);   
+    if(opcode == 0xe000) lea(currInstruction);
+    if(opcode == 0x9000) not(currInstruction);
+    if(opcode == 0xd000) shf(currInstruction);
+    if(opcode == 0x3000) stb(currInstruction);
+    if(opcode == 0x7000) stw(currInstruction);
+    if(opcode == 0xf000) trap(currInstruction);
 }
 void and(int currInstruction){
 
@@ -468,19 +470,228 @@ void and(int currInstruction){
     int destReg;
     int srcReg1;
     int srcReg2;
+    int imm5;
+
+    destReg = CURRENT_LATCHES.REGS[(currInstruction&0x0E00)>>9];
+    srcReg1 = CURRENT_LATCHES.REGS[(currInstruction&0x01c0)>>6];
+    srcReg2 = CURRENT_LATCHES.REGS[(currInstruction&0x0007)];
+
+    imm5 = currInstruction&0x001f;
+    sext(&imm5,4);
     if (!(currInstruction & 0x0020)){
-      
+        NEXT_LATCHES.REGS[(currInstruction&0x0E00)>>9] = Low16bits(srcReg1 & srcReg2);
+    }
+    else{
+        NEXT_LATCHES.REGS[(currInstruction&0x0E00)>>9] = Low16bits(srcReg1 & imm5);
+    }
+    if(isPositive(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.P = 1;}
+    if(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9]==0){NEXT_LATCHES.Z = 1;}
+    if(isNegative(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.N = 1;}
+    // requires testing
+}
+void add(int currInstruction){
+    int destReg;
+    int srcReg1;
+    int srcReg2;
+    int imm5;
+
+    destReg = CURRENT_LATCHES.REGS[(currInstruction&0x0E00)>>9];
+    srcReg1 = CURRENT_LATCHES.REGS[(currInstruction&0x01c0)>>6];
+    srcReg2 = CURRENT_LATCHES.REGS[(currInstruction&0x0007)];
+
+    imm5 = Low16bits(currInstruction&0x001f);
+    sext(&imm5,4);
+    if (!(currInstruction & 0x0020)){
+        NEXT_LATCHES.REGS[(currInstruction&0x0E00)>>9] = Low16bits(srcReg1 + srcReg2);
+    }
+    else{
+        NEXT_LATCHES.REGS[(currInstruction&0x0E00)>>9] = Low16bits(srcReg1 + imm5);
+	// still need to set condition codes
+    }
+    if(isPositive(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.P = 1;}
+    if(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9]==0){NEXT_LATCHES.Z = 1;}
+    if(isNegative(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.N = 1;}
+    // requires testing
+}
+void br(int currInstruction){
+    //if ((n AND N) OR (z AND Z) OR (p AND P))
+    //PC = PCü + LSHF(SEXT(PCoffset9), 1);
+    int offset9 = currInstruction & 0x01ff;
+    sext(&offset9,8);
+    if(CURRENT_LATCHES.N || CURRENT_LATCHES.P || CURRENT_LATCHES.Z){
+      NEXT_LATCHES.PC = CURRENT_LATCHES.PC + (offset9 << 1);   
+    }
+    // requires testing
+}
+void jmp(int currInstruction){
+    
+    //
+    //PC = BaseR
+    NEXT_LATCHES.PC = Low16bits(CURRENT_LATCHES.REGS[(currInstruction&0x01c0)>>6]);
+    // requires testing
+}
+void jsrr(int currInstruction){
+	//TEMP = PC†
+	//	if (bit(11)==0)
+	//	   PC = BaseR;
+	//	else
+	//	   PC = PC† + LSHF(SEXT(PCoffset11), 1);
+	//      R7 = TEMP;
+	//			    		    		
+	//* PC†: incremented PC
+    NEXT_LATCHES.REGS[7] = Low16bits(NEXT_LATCHES.PC);
+    int offset11 = currInstruction&0x07ff;
+    sext(&offset11,10);
+    if(!(currInstruction&0x0800)){
+      NEXT_LATCHES.PC = CURRENT_LATCHES.REGS[(currInstruction&0x01c0)>>6];	
+    }else{
+         NEXT_LATCHES.PC = NEXT_LATCHES.PC + (offset11<<1);
+     }    	
+    // requires testing
+}
+void ldb(int currInstruction){
+    //DR = SEXT(mem[BaseR + SEXT(boffset6)]);
+    //setcc();
+    int baseR = (currInstruction&0x01c0)>>6;
+    int imm6 = currInstruction&0x003f;
+    sext(&imm6,5);
+    NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9] = Low16bits(MEMORY[(CURRENT_LATCHES.REGS[baseR]+imm6)>>1][0]);
+    if(isPositive(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.P = 1;}
+    if(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9]==0){NEXT_LATCHES.Z = 1;}
+    if(isNegative(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.N = 1;}
+    // requires testing
+}
+void ldw(int currInstruction){
+    //DR = MEM[BaseR + LSHF(SEXT(offset6), 1)];
+    //setcc();
+    int baseR = (currInstruction&0x01c0)>>6;
+    int imm6 = currInstruction&0x003f;
+    sext(&imm6,5);
+    int destination;
+    destination  = MEMORY[(CURRENT_LATCHES.REGS[baseR]+imm6)>>1][0];
+    destination  = destination + (MEMORY[(CURRENT_LATCHES.REGS[baseR]+imm6)>>1][1]<<8);
+    NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9] = Low16bits(destination);
+    if(isPositive(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.P = 1;}
+    if(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9]==0){NEXT_LATCHES.Z = 1;}
+    if(isNegative(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.N = 1;}
+    // requires testing
+
+}
+void lea(int currInstruction){
+    //DR = PCë + LSHF(SEXT(PCoffset9),1);
+    int offset9 = currInstruction&0x01ff;
+    sext(&offset9,8);
+      NEXT_LATCHES.REGS[(currInstruction & 0x0e00)>>9] = Low16bits(CURRENT_LATCHES.PC + (offset9 << 1));   
+}
+void not(int currInstruction){
+    //if (bit[5] == 0)
+    //DR = SR1 XOR SR2;
+    //else
+    //DR = SR1 XOR SEXT(imm5);
+    //setcc();
+
+    int destR = (currInstruction&0x0e00)>>9;
+    int sourceR1 = (currInstruction&0x01c0)>>6;
+    int sourceR2 = currInstruction&0x0007;
+    int imm5 = currInstruction&0x001f;
+    sext(&imm5,4);
+    if (!currInstruction&0x0020){
+       NEXT_LATCHES.REGS[destR] = Low16bits(NEXT_LATCHES.REGS[sourceR1] ^ NEXT_LATCHES.REGS[sourceR2]);
+    }
+    else{
+       NEXT_LATCHES.REGS[destR] = Low16bits(NEXT_LATCHES.REGS[sourceR1] ^ imm5);
+    }
+    if(isPositive(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.P = 1;}
+    if(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9]==0){NEXT_LATCHES.Z = 1;}
+    if(isNegative(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.N = 1;}
+    // requires testing
+    
+}
+void shf(int currInstruction){
+    //if (bit[4] == 0)
+    //DR = LSHF(SR, amount4);
+    //else
+    //  if (bit[5] == 0)
+    //    DR = RSHF(SR, amount4, 0);
+    //  else
+    //   DR = RSHF(SR, amount4, SR[15]);
+    //setcc();
+      int destR = (currInstruction&0x0e00)>>9;
+      int sourceR = (currInstruction&0x01c0)>>6;
+    if(!(currInstruction&0x0010)){
+      NEXT_LATCHES.REGS[destR] = Low16bits(CURRENT_LATCHES.REGS[sourceR]<<(currInstruction&0x000f));
+    }else 
+      if(!currInstruction&0x0020){
+            unsigned int value = (unsigned int)CURRENT_LATCHES.REGS[sourceR];
+            value = value >> (currInstruction&0x000f);
+	    NEXT_LATCHES.REGS[destR] = Low16bits((int) value);
+          }else {
+	    int result = CURRENT_LATCHES.REGS[sourceR] >> (currInstruction&0x000f);
+	    sext(&result,6);
+            NEXT_LATCHES.REGS[destR] = Low16bits(result); 
+ 	   }
+    if(isPositive(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.P = 1;}
+    if(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9]==0){NEXT_LATCHES.Z = 1;}
+    if(isNegative(NEXT_LATCHES.REGS[(currInstruction&0x0e00)>>9])){NEXT_LATCHES.N = 1;}
+    // requires testing
+}
+void stb(int currInstruction){
+    //mem[BaseR + SEXT(boffset6)] = SR[7:0];
+    int baseR = (currInstruction&0x01c0)>>6;
+    int offset6 = currInstruction&0x003f;
+    sext(&offset6,5);
+    int sourceR = (currInstruction&0x0e00)>>9;
+    MEMORY[(CURRENT_LATCHES.REGS[baseR]+offset6)>>1][0] = Low16bits(CURRENT_LATCHES.REGS[sourceR] & 0x00ff);
+    // requires testing
+}
+void stw(int currInstruction){
+    //MEM[BaseR + LSHF(SEXT(offset6), 1)] = SR;
+    int baseR = (currInstruction&0x01c0)>>6;
+    int offset6 = currInstruction&0x003f;
+    
+    sext(&offset6,5);
+
+    int sourceR = (currInstruction&0x0e00)>>9;
+    int right8 = CURRENT_LATCHES.REGS[sourceR]&0x00ff;
+    int left8 = (CURRENT_LATCHES.REGS[sourceR]&0xff00)>>8;
+    MEMORY[(CURRENT_LATCHES.REGS[baseR]+ (offset6<<1))>>1][0] = Low16bits(right8);
+    MEMORY[(CURRENT_LATCHES.REGS[baseR]+ (offset6<<1))>>1][1] = Low16bits(left8);
+}
+void trap(int currInstruction){
+    //R7 = PCë ;
+    //PC = MEM[LSHF(ZEXT(trapvect8), 1)];
+    NEXT_LATCHES.REGS[7] = Low16bits(NEXT_LATCHES.PC);
+    NEXT_LATCHES.PC = 0;
+    // requires testing
+}
+void sext(int *number, int bit){
+    int num = *number;
+    num = num >> bit;
+    num = num & 0x0001;
+    if(num){
+      if(bit ==4){
+        *number = *number | 0xffffffe0;
+      } 
+      if(bit ==8){ 
+        *number = *number | 0xfffffe00;
+      } 
+      if(bit ==10){
+        *number = *number | 0xfffff800;
+      } 
+      if(bit ==5){
+        *number = *number | 0xffffffc0;
+      }
+      if(bit == 6) {
+	*number = *number | 0xffffff80;
+      }
     }
 }
-void add(){}
-void br(){}
-void jmp(){}
-void jsrr(){}
-void ldb(){}
-void lea(){}
-void not(){}
-void shf(){}
-void stb(){}
-void stw(){}
-void trap(){}
-void jsrr(){}
+int isNegative(int num){
+    if(num&0x0080){return TRUE;}
+    else return FALSE;
+}
+int isPositive(int num){
+    if(num&0x0080){return FALSE;}
+    if(num == 0){return FALSE;}
+    else return TRUE;
+}
